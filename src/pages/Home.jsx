@@ -301,7 +301,7 @@ export default function Home() {
         <p style={{ margin: 0, fontSize: "12px", color: "#64748b" }}>
           © {new Date().getFullYear()} LannApp. Developed by{" "}
           <a
-            href="https://kyawzinko.portfolio.app"
+            href="https://kyawxinndev.netlify.app/"
             target="_blank"
             rel="noreferrer"
             style={{ color: "#d97706", textDecoration: "none", fontWeight: "800" }}
