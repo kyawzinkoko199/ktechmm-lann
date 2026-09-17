@@ -94,16 +94,6 @@ export default function Home() {
     return matchesSearch && matchesCategory;
   });
 
-  // Smart Link Trigger (Only for download buttons)
-  const handleSmartLink = (targetUrl) => {
-    window.open("https://www.profitableratecpmnetwork.com/zxhnp4977?key=c96a6296152a43fed0bd850c48f7aa1d", "_blank");
-    if (targetUrl) {
-      setTimeout(() => {
-        window.open(targetUrl, "_blank");
-      }, 500);
-    }
-  };
-
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f8fafc", fontFamily: "'Plus Jakarta Sans', sans-serif", paddingBottom: isMobile ? "70px" : "0" }}>
       
