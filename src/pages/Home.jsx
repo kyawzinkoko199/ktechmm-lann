@@ -94,11 +94,21 @@ export default function Home() {
     return matchesSearch && matchesCategory;
   });
 
+  // Smart Link Trigger
+  const handleSmartLink = (targetUrl) => {
+    window.open("https://www.profitableratecpmnetwork.com/zxhnp4977?key=c96a6296152a43fed0bd850c48f7aa1d", "_blank");
+    if (targetUrl) {
+      setTimeout(() => {
+        window.open(targetUrl, "_blank");
+      }, 500);
+    }
+  };
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f8fafc", fontFamily: "'Plus Jakarta Sans', sans-serif", paddingBottom: isMobile ? "70px" : "0" }}>
       
       {/* 🚀 HEADER / NAVBAR */}
-      <header style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", sticky: "top", top: 0, zIndex: 100 }}>
+      <header style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100 }}>
         
         {/* LOGO */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -109,7 +119,6 @@ export default function Home() {
         {/* HEADER NAVIGATION & ACTIONS */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           
-          {/* TELEGRAM BUTTON (FULL TEXT FOR DESKTOP / ICON ONLY FOR MOBILE) */}
           <a
             href="https://t.me/lannappMM"
             target="_blank"
@@ -245,16 +254,21 @@ export default function Home() {
               </p>
             </div>
 
-            {/* 📥 DOWNLOAD BUTTONS */}
+            {/* 📥 DOWNLOAD BUTTONS (3 LINKS SUPPORT) */}
             <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: "8px" }}>
-              {selectedApp.driveUrl && (
-                <a href={selectedApp.driveUrl} target="_blank" rel="noreferrer" onClick={() => handleSmartLink()} style={{ flex: 1, textDecoration: "none", background: "#d97706", color: "#ffffff", padding: "12px", borderRadius: "10px", textAlign: "center", fontWeight: "800", fontSize: "13px" }}>
+              {(selectedApp.driveUrl || selectedApp.driveUrl1) && (
+                <a href={selectedApp.driveUrl || selectedApp.driveUrl1} target="_blank" rel="noreferrer" onClick={() => handleSmartLink()} style={{ flex: 1, textDecoration: "none", background: "#d97706", color: "#ffffff", padding: "12px", borderRadius: "10px", textAlign: "center", fontWeight: "800", fontSize: "12px" }}>
                   🚀 Download Link 1
                 </a>
               )}
               {selectedApp.driveUrl2 && (
-                <a href={selectedApp.driveUrl2} target="_blank" rel="noreferrer" onClick={() => handleSmartLink()} style={{ flex: 1, textDecoration: "none", background: "#0f172a", color: "#ffffff", padding: "12px", borderRadius: "10px", textAlign: "center", fontWeight: "800", fontSize: "13px" }}>
+                <a href={selectedApp.driveUrl2} target="_blank" rel="noreferrer" onClick={() => handleSmartLink()} style={{ flex: 1, textDecoration: "none", background: "#0f172a", color: "#ffffff", padding: "12px", borderRadius: "10px", textAlign: "center", fontWeight: "800", fontSize: "12px" }}>
                   📥 Download Link 2
+                </a>
+              )}
+              {selectedApp.driveUrl3 && (
+                <a href={selectedApp.driveUrl3} target="_blank" rel="noreferrer" onClick={() => handleSmartLink()} style={{ flex: 1, textDecoration: "none", background: "#2563eb", color: "#ffffff", padding: "12px", borderRadius: "10px", textAlign: "center", fontWeight: "800", fontSize: "12px" }}>
+                  ⚡ Download Link 3
                 </a>
               )}
             </div>
@@ -273,6 +287,36 @@ export default function Home() {
             <img src={previewImage} alt="Full View" style={{ maxWidth: "100%", maxHeight: "85vh", borderRadius: "12px" }} />
             <button onClick={() => setPreviewImage(null)} style={{ position: "absolute", top: "-36px", right: "0", background: "none", border: "none", color: "#ffffff", fontSize: "20px", cursor: "pointer", fontWeight: "bold" }}>✕ Close</button>
           </div>
+        </div>
+      )}
+
+      {/* 📱 MOBILE BOTTOM FLOATING TELEGRAM ACTION BAR */}
+      {isMobile && (
+        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#ffffff", borderTop: "1px solid #e2e8f0", padding: "10px 16px", zIndex: 900, display: "flex", justifyContent: "center", boxShadow: "0 -4px 12px rgba(0, 0, 0, 0.05)" }}>
+          <a
+            href="https://t.me/lannappMM"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              width: "100%",
+              maxWidth: "400px",
+              textDecoration: "none",
+              background: "linear-gradient(135deg, #229ED9, #0088cc)",
+              color: "#ffffff",
+              padding: "10px",
+              borderRadius: "12px",
+              fontSize: "13px",
+              fontWeight: "800",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              boxShadow: "0 4px 12px rgba(34, 158, 217, 0.3)"
+            }}
+          >
+            <span style={{ fontSize: "16px" }}>✈️</span>
+            <span>Join Our Telegram Channel</span>
+          </a>
         </div>
       )}
 
