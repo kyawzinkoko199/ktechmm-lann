@@ -45,7 +45,7 @@ const ModalAd = () => {
   }, []);
 
   return (
-    <div style={{ marginTop: "24px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "12px", textAlign: "center" }}>
+    <div style={{ marginTop: "20px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "12px", textAlign: "center" }}>
       <span style={{ fontSize: "10px", fontWeight: "800", color: "#94a3b8", letterSpacing: "1px", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>
         — Sponsored Content —
       </span>
@@ -63,16 +63,14 @@ export default function Home() {
   const [selectedApp, setSelectedApp] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
 
-  // Responsive state helper
+  // Responsive Mobile Check State
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 640);
-    };
-    handleResize(); // Initial check
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const checkMobile = () => setIsMobile(window.innerWidth <= 640);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   useEffect(() => {
@@ -96,7 +94,7 @@ export default function Home() {
     return matchesSearch && matchesCategory;
   });
 
-  // Smart Link Trigger (Only for app downloads)
+  // Smart Link Trigger (Only for download buttons)
   const handleSmartLink = (targetUrl) => {
     window.open("https://www.profitableratecpmnetwork.com/zxhnp4977?key=c96a6296152a43fed0bd850c48f7aa1d", "_blank");
     if (targetUrl) {
@@ -111,39 +109,38 @@ export default function Home() {
       
       {/* 🚀 HEADER / NAVBAR */}
       <header style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", sticky: "top", top: 0, zIndex: 100 }}>
+        
         {/* LOGO */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ width: "34px", height: "34px", background: "linear-gradient(135deg, #f59e0b, #d97706)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "18px", fontWeight: "900" }}>L</div>
-          <span style={{ fontWeight: "800", fontSize: isMobile ? "1.2rem" : "1.4rem", color: "#0f172a" }}>LannApp</span>
+          <div style={{ width: "36px", height: "36px", background: "linear-gradient(135deg, #f59e0b, #d97706)", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "18px", fontWeight: "900" }}>L</div>
+          <span style={{ fontWeight: "800", fontSize: "1.3rem", color: "#0f172a" }}>LannApp</span>
         </div>
 
-        {/* HEADER RIGHT ACTIONS */}
+        {/* HEADER NAVIGATION & ACTIONS */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           
-          {/* DESKTOP TELEGRAM BUTTON */}
-          {!isMobile && (
-            <a
-              href="https://t.me/lannappMM"
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                textDecoration: "none",
-                background: "linear-gradient(135deg, #229ED9, #0088cc)",
-                color: "#ffffff",
-                padding: "8px 14px",
-                borderRadius: "10px",
-                fontSize: "12px",
-                fontWeight: "800",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                boxShadow: "0 2px 8px rgba(34, 158, 217, 0.25)"
-              }}
-            >
-              <span>✈️</span>
-              <span>Join Telegram</span>
-            </a>
-          )}
+          {/* TELEGRAM BUTTON (FULL TEXT FOR DESKTOP / ICON ONLY FOR MOBILE) */}
+          <a
+            href="https://t.me/lannappMM"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              textDecoration: "none",
+              background: "linear-gradient(135deg, #229ED9, #0088cc)",
+              color: "#ffffff",
+              padding: isMobile ? "8px 12px" : "8px 14px",
+              borderRadius: "10px",
+              fontSize: "12px",
+              fontWeight: "800",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              boxShadow: "0 2px 8px rgba(34, 158, 217, 0.2)"
+            }}
+          >
+            <span style={{ fontSize: "14px" }}>✈️</span>
+            {!isMobile && <span>Join Telegram</span>}
+          </a>
 
           {/* LANGUAGE TOGGLE */}
           <div style={{ display: "flex", background: "#f1f5f9", padding: "3px", borderRadius: "8px" }}>
@@ -202,7 +199,7 @@ export default function Home() {
         )}
       </main>
 
-      {/* 🪟 POP-UP MODAL */}
+      {/* 🪟 COMPLETE APP DETAILS POP-UP MODAL */}
       {selectedApp && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "16px" }} onClick={() => setSelectedApp(null)}>
           <div style={{ background: "#ffffff", borderRadius: "24px", padding: "20px", maxWidth: "680px", width: "100%", maxHeight: "85vh", overflowY: "auto", position: "relative", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
@@ -279,43 +276,13 @@ export default function Home() {
         </div>
       )}
 
-      {/* 🖼️ PREVIEW MODAL */}
+      {/* 🖼️ PREVIEW LIGHTBOX */}
       {previewImage && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.85)", backdropFilter: "blur(5px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 }} onClick={() => setPreviewImage(null)}>
           <div style={{ position: "relative", maxWidth: "90%", maxHeight: "90%" }}>
             <img src={previewImage} alt="Full View" style={{ maxWidth: "100%", maxHeight: "85vh", borderRadius: "12px" }} />
             <button onClick={() => setPreviewImage(null)} style={{ position: "absolute", top: "-36px", right: "0", background: "none", border: "none", color: "#ffffff", fontSize: "20px", cursor: "pointer", fontWeight: "bold" }}>✕ Close</button>
           </div>
-        </div>
-      )}
-
-      {/* 📱 MOBILE FLOATING / BOTTOM STICKY TELEGRAM BAR */}
-      {isMobile && (
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#ffffff", borderTop: "1px solid #e2e8f0", padding: "10px 16px", zIndex: 900, display: "flex", justifyContent: "center", boxShadow: "0 -4px 12px rgba(0, 0, 0, 0.05)" }}>
-          <a
-            href="https://t.me/lannappMM"
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              width: "100%",
-              maxWidth: "400px",
-              textDecoration: "none",
-              background: "linear-gradient(135deg, #229ED9, #0088cc)",
-              color: "#ffffff",
-              padding: "10px",
-              borderRadius: "12px",
-              fontSize: "13px",
-              fontWeight: "800",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              boxShadow: "0 4px 12px rgba(34, 158, 217, 0.3)"
-            }}
-          >
-            <span style={{ fontSize: "16px" }}>✈️</span>
-            <span>Join Our Telegram Channel</span>
-          </a>
         </div>
       )}
 
