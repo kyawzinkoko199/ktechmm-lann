@@ -11,7 +11,7 @@ export default function Home() {
 
   // MODAL STATES
   const [selectedApp, setSelectedApp] = useState(null);
-  const [previewImage, setPreviewImage] = useState(null); // Image Viewer State
+  const [previewImage, setPreviewImage] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -38,6 +38,28 @@ export default function Home() {
     const matchesCategory = selectedCategory === "All" || app.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  // 🔗 SHARE FUNCTIONALITY
+  const handleShare = async (e, app) => {
+    e.stopPropagation(); // Prevents opening the detail modal
+
+    const shareData = {
+      title: app.title,
+      text: `Check out ${app.title} on LannApp!`,
+      url: window.location.href
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log("Error sharing:", err);
+      }
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert(" Link copied to clipboard!");
+    }
+  };
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f8fafc", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -99,7 +121,7 @@ export default function Home() {
           ))}
         </div>
 
-        {/* 📱 APP GRID */}
+        {/* 📱 APP GRID WITH SHARE BUTTON */}
         {filteredApps.length === 0 ? (
           <div style={{ textAlign: "center", color: "#94a3b8", marginTop: "40px", fontSize: "14px" }}>
             {lang === "MM" ? "မည်သည့် အပလီကေးရှင်းမှ မရှိသေးပါ။" : "No applications found."}
@@ -110,23 +132,53 @@ export default function Home() {
               <div
                 key={app.id}
                 onClick={() => setSelectedApp(app)}
-                style={{ background: "#ffffff", borderRadius: "20px", padding: "20px", textAlign: "center", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)", cursor: "pointer", transition: "transform 0.2s" }}
+                style={{ background: "#ffffff", borderRadius: "20px", padding: "20px", textAlign: "center", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)", cursor: "pointer", transition: "transform 0.2s", position: "relative" }}
                 onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-4px)"}
                 onMouseLeave={(e) => e.currentTarget.style.transform = "translateY(0)"}
               >
+                {/* 🔗 SHARE BUTTON ON CARD */}
+                <button
+                  onClick={(e) => handleShare(e, app)}
+                  title="Share App"
+                  style={{
+                    position: "absolute",
+                    top: "12px",
+                    right: "12px",
+                    background: "#f1f5f9",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "30px",
+                    height: "30px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: "#475569",
+                    fontSize: "12px",
+                    transition: "background 0.2s"
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "#e2e8f0"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "#f1f5f9"}
+                >
+                  🔗
+                </button>
+
                 <img src={app.imageUrl || "https://via.placeholder.com/80"} alt={app.title} style={{ width: "80px", height: "80px", borderRadius: "18px", objectFit: "cover", marginBottom: "14px" }} />
                 <h3 style={{ margin: "0 0 6px 0", fontSize: "1.1rem", fontWeight: "800", color: "#0f172a" }}>{app.title}</h3>
                 <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "#d97706", fontWeight: "700" }}>By {app.developerName || "Developer"}</p>
-                <span style={{ display: "inline-block", background: "#f1f5f9", padding: "4px 10px", borderRadius: "12px", fontSize: "11px", color: "#475569", fontWeight: "700" }}>
-                  v{app.version || "1.0.0"} • {app.androidReq || "Android 8.0+"}
-                </span>
+                
+                <div style={{ display: "flex", gap: "6px", justifyContent: "center", alignItems: "center" }}>
+                  <span style={{ display: "inline-block", background: "#f1f5f9", padding: "4px 10px", borderRadius: "12px", fontSize: "11px", color: "#475569", fontWeight: "700" }}>
+                    v{app.version || "1.0.0"} • {app.androidReq || "Android 8.0+"}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
         )}
       </main>
 
-      {/* 🪟 APP DETAILS POP-UP MODAL (EXACT MATCH) */}
+      {/* 🪟 APP DETAILS POP-UP MODAL */}
       {selectedApp && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }} onClick={() => setSelectedApp(null)}>
           <div style={{ background: "#ffffff", borderRadius: "24px", padding: "28px", maxWidth: "680px", width: "100%", maxHeight: "88vh", overflowY: "auto", position: "relative", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)" }} onClick={(e) => e.stopPropagation()}>
@@ -145,8 +197,6 @@ export default function Home() {
 
             {/* SCREENSHOTS & SPECIFICATIONS GRID */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 240px", gap: "16px", marginBottom: "24px" }}>
-              
-              {/* SCREENSHOTS ROW (CLICK TO VIEW FULL IMAGE) */}
               <div style={{ display: "flex", gap: "10px", overflowX: "auto", paddingBottom: "6px" }}>
                 {selectedApp.screenshots && selectedApp.screenshots.filter(Boolean).length > 0 ? (
                   selectedApp.screenshots.filter(Boolean).map((img, idx) => (
@@ -154,7 +204,7 @@ export default function Home() {
                       key={idx}
                       src={img}
                       alt="screenshot"
-                      onClick={() => setPreviewImage(img)} // Opens full image preview
+                      onClick={() => setPreviewImage(img)}
                       style={{ height: "180px", borderRadius: "12px", objectFit: "cover", cursor: "pointer", border: "1px solid #e2e8f0" }}
                     />
                   ))
@@ -163,7 +213,6 @@ export default function Home() {
                 )}
               </div>
 
-              {/* APP SPECIFICATIONS CARD */}
               <div style={{ background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "16px", padding: "16px" }}>
                 <h4 style={{ margin: "0 0 12px 0", fontSize: "11px", color: "#b45309", fontWeight: "800", textAlign: "center", letterSpacing: "0.5px" }}>APP SPECIFICATIONS</h4>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px" }}>
@@ -173,7 +222,6 @@ export default function Home() {
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#64748b" }}>Category:</span><span style={{ fontWeight: "700", color: "#334155" }}>{selectedApp.category || "General"}</span></div>
                 </div>
               </div>
-
             </div>
 
             {/* ABOUT THIS APP SECTION */}
@@ -184,7 +232,7 @@ export default function Home() {
               </p>
             </div>
 
-            {/* DOWNLOAD BUTTONS */}
+            {/* DOWNLOAD BUTTONS & MODAL SHARE */}
             <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
               {selectedApp.driveUrl && (
                 <a href={selectedApp.driveUrl} target="_blank" rel="noreferrer" style={{ flex: 1, textDecoration: "none", background: "#d97706", color: "#ffffff", padding: "12px", borderRadius: "12px", textAlign: "center", fontWeight: "800", fontSize: "13px" }}>
@@ -196,6 +244,12 @@ export default function Home() {
                   📥 Download Link 2
                 </a>
               )}
+              <button
+                onClick={(e) => handleShare(e, selectedApp)}
+                style={{ background: "#3b82f6", color: "#ffffff", border: "none", padding: "12px 18px", borderRadius: "12px", fontWeight: "800", fontSize: "13px", cursor: "pointer" }}
+              >
+                🔗 Share
+              </button>
             </div>
 
           </div>
