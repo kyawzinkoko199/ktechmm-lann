@@ -59,7 +59,6 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [lang, setLang] = useState("MM");
-  const [telegramLink, setTelegramLink] = useState("");
 
   const [selectedApp, setSelectedApp] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
@@ -70,11 +69,6 @@ export default function Home() {
         const querySnapshot = await getDocs(collection(db, "apps"));
         const list = querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
         setApps(list);
-
-        const docSnap = await getDoc(doc(db, "settings", "store"));
-        if (docSnap.exists() && docSnap.data().telegramLink) {
-          setTelegramLink(docSnap.data().telegramLink);
-        }
       } catch (err) {
         console.error("Error fetching home data:", err);
       }
@@ -90,7 +84,7 @@ export default function Home() {
     return matchesSearch && matchesCategory;
   });
 
-  // 🔗 Smart Link Trigger & Redirection
+  // 🔗 Smart Link Trigger & Redirection (Only for download links)
   const handleSmartLink = (targetUrl) => {
     window.open("https://www.profitableratecpmnetwork.com/zxhnp4977?key=c96a6296152a43fed0bd850c48f7aa1d", "_blank");
     if (targetUrl) {
@@ -111,11 +105,13 @@ export default function Home() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {/* WATCH ADS TO CONTINUE / TELEGRAM BUTTON */}
-          <button
-            onClick={() => handleSmartLink(telegramLink || "https://t.me")}
+          {/* DIRECT TELEGRAM LINK (NO SMART LINK) */}
+          <a
+            href="https://t.me/lannappMM"
+            target="_blank"
+            rel="noreferrer"
             style={{
-              border: "none",
+              textDecoration: "none",
               background: "linear-gradient(135deg, #229ED9, #0088cc)",
               color: "#ffffff",
               padding: "8px 14px",
@@ -124,13 +120,12 @@ export default function Home() {
               fontWeight: "800",
               display: "flex",
               alignItems: "center",
-              gap: "6px",
-              cursor: "pointer"
+              gap: "6px"
             }}
           >
             <span>✈️</span>
-            <span>Join Telegram (Watch Ads to Continue)</span>
-          </button>
+            <span>Join Telegram</span>
+          </a>
 
           <div style={{ display: "flex", background: "#f1f5f9", padding: "3px", borderRadius: "8px" }}>
             <button onClick={() => setLang("MM")} style={{ padding: "6px 12px", border: "none", borderRadius: "6px", fontSize: "11px", fontWeight: "800", cursor: "pointer", background: lang === "MM" ? "#d97706" : "transparent", color: lang === "MM" ? "#ffffff" : "#64748b" }}>MM</button>
