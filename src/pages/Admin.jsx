@@ -11,24 +11,28 @@ import {
   setDoc 
 } from "firebase/firestore";
 
+// Sorted alphabetically by default
+const DEFAULT_CATEGORIES = ["Business", "Entertainment", "Games", "Productivity", "Social", "Tools"];
+
 export default function Admin() {
-  // ADMIN AUTHENTICATION STATE
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
-  
-  // DIRECT DEFAULT PASSWORD
-  const [adminPassword, setAdminPassword] = useState("admin123");
+  const [adminPassword, setAdminPassword] = useState(() => {
+    return localStorage.getItem("lann_admin_pass") || "17041995";
+  });
 
   const [activeTab, setActiveTab] = useState("apps");
-
-  // APP FORM STATE
   const [apps, setApps] = useState([]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [showFormModal, setShowFormModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
+
   const [form, setForm] = useState({
     title: "",
     developerName: "",
     developerLink: "",
-    category: "Tools",
+    category: "Business",
     version: "1.0.0",
     androidReq: "Android 8.0+",
     size: "",
@@ -41,11 +45,9 @@ export default function Admin() {
     screenshots: ["", "", ""]
   });
 
-  // PAGINATION STATE
   const [currentPage, setCurrentPage] = useState(1);
-  const appsPerPage = 5;
+  const appsPerPage = 6;
 
-  // STORE SETTINGS STATE
   const [settings, setSettings] = useState({
     storeName: "LannApp",
     supportEmail: "",
@@ -53,24 +55,32 @@ export default function Admin() {
     maintenanceMode: false
   });
 
-  // CHANGE PASSWORD STATE
-  const [passForm, setPassForm] = useState({
-    currentPass: "",
-    newPass: "",
-    confirmPass: ""
-  });
+  const [passForm, setPassForm] = useState({ currentPass: "", newPass: "", confirmPass: "" });
 
-  // ANNOUNCEMENT BANNER STATE
-  const [bannerText, setBannerText] = useState("");
+  useEffect(() => {
+    fetchPassword();
+  }, []);
 
-  // FETCH DATA AFTER AUTHENTICATION
   useEffect(() => {
     if (isAuthenticated) {
       fetchApps();
       fetchSettings();
-      fetchBanner();
+      fetchCategories();
     }
   }, [isAuthenticated]);
+
+  const fetchPassword = async () => {
+    try {
+      const docSnap = await getDoc(doc(db, "settings", "auth"));
+      if (docSnap.exists() && docSnap.data().password) {
+        const dbPass = String(docSnap.data().password).trim();
+        setAdminPassword(dbPass);
+        localStorage.setItem("lann_admin_pass", dbPass);
+      }
+    } catch (err) {
+      console.warn("Firestore Auth error, using local fallback:", err);
+    }
+  };
 
   const fetchApps = async () => {
     try {
@@ -85,74 +95,150 @@ export default function Admin() {
   const fetchSettings = async () => {
     try {
       const docSnap = await getDoc(doc(db, "settings", "store"));
-      if (docSnap.exists()) {
-        setSettings(docSnap.data());
-      }
+      if (docSnap.exists()) setSettings(docSnap.data());
     } catch (err) {
       console.error("Error fetching settings:", err);
     }
   };
 
-  const fetchBanner = async () => {
+  // 📁 Fetch & Alphabetically Sort Categories
+  const fetchCategories = async () => {
     try {
-      const docSnap = await getDoc(doc(db, "announcements", "banner"));
-      if (docSnap.exists()) {
-        setBannerText(docSnap.data().text || "");
+      const docSnap = await getDoc(doc(db, "settings", "categories"));
+      if (docSnap.exists() && docSnap.data().list) {
+        const sortedCategories = [...docSnap.data().list].sort((a, b) => a.localeCompare(b));
+        setCategories(sortedCategories);
+        if (sortedCategories.length > 0) {
+          setForm((prev) => ({ ...prev, category: sortedCategories[0] }));
+        }
       }
     } catch (err) {
-      console.error("Error fetching banner:", err);
+      console.error("Error fetching categories:", err);
     }
   };
 
-  // LOGIN HANDLER
-  const handleLogin = (e) => {
+  // ➕ Add New Custom Category
+  const handleAddCategory = async (e) => {
     e.preventDefault();
-    if (passwordInput.trim() === adminPassword.trim()) {
-      setIsAuthenticated(true);
-    } else {
-      alert("Incorrect Admin Password! Enter: admin123");
+    const trimmed = newCategoryInput.trim();
+    if (!trimmed) return;
+
+    if (categories.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+      alert("Category already exists!");
+      return;
+    }
+
+    const updatedList = [...categories, trimmed].sort((a, b) => a.localeCompare(b));
+    setCategories(updatedList);
+    setNewCategoryInput("");
+
+    try {
+      await setDoc(doc(db, "settings", "categories"), { list: updatedList });
+      alert("✅ Custom category added successfully!");
+    } catch (err) {
+      console.error("Error saving categories:", err);
     }
   };
 
-  // CHANGE PASSWORD HANDLER (SAVES TO LOCAL & FIRESTORE)
+  // 🗑️ Delete Category
+  const handleDeleteCategory = async (catToDelete) => {
+    if (categories.length <= 1) {
+      alert("You must keep at least one category!");
+      return;
+    }
+    if (window.confirm(`Delete category "${catToDelete}"?`)) {
+      const updatedList = categories.filter((c) => c !== catToDelete);
+      setCategories(updatedList);
+      try {
+        await setDoc(doc(db, "settings", "categories"), { list: updatedList });
+        alert("Category deleted!");
+      } catch (err) {
+        console.error("Error deleting category:", err);
+      }
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    const enteredPass = passwordInput.trim();
+    
+    if (enteredPass === adminPassword.trim()) {
+      setIsAuthenticated(true);
+      return;
+    }
+
+    try {
+      const docSnap = await getDoc(doc(db, "settings", "auth"));
+      if (docSnap.exists()) {
+        const dbPass = String(docSnap.data().password).trim();
+        if (enteredPass === dbPass) {
+          setIsAuthenticated(true);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    alert("❌ Incorrect Password!");
+  };
+
   const handleChangePassword = async (e) => {
     e.preventDefault();
     if (passForm.currentPass.trim() !== adminPassword.trim()) {
-      alert("Current password is incorrect!");
+      alert("❌ Current password is incorrect!");
       return;
     }
-    if (passForm.newPass !== passForm.confirmPass) {
-      alert("New passwords do not match!");
+    if (passForm.newPass.trim() !== passForm.confirmPass.trim()) {
+      alert("❌ New passwords do not match!");
       return;
     }
-    if (passForm.newPass.length < 6) {
-      alert("New password should be at least 6 characters!");
-      return;
-    }
+
+    const targetPass = passForm.newPass.trim();
+    localStorage.setItem("lann_admin_pass", targetPass);
+    setAdminPassword(targetPass);
 
     try {
-      await setDoc(doc(db, "settings", "auth"), { password: passForm.newPass.trim() });
-      setAdminPassword(passForm.newPass.trim());
-      alert("Admin password changed successfully! Use your new password next time.");
-      setPassForm({ currentPass: "", newPass: "", confirmPass: "" });
+      await setDoc(doc(db, "settings", "auth"), { password: targetPass }, { merge: true });
+      alert("✅ Password changed successfully!");
     } catch (err) {
-      console.error("Error updating password:", err);
-      // Fallback if firestore rules block writing
-      setAdminPassword(passForm.newPass.trim());
-      alert("Password updated locally!");
-      setPassForm({ currentPass: "", newPass: "", confirmPass: "" });
+      alert("⚠️ Updated locally, Firestore blocked.");
     }
+    setPassForm({ currentPass: "", newPass: "", confirmPass: "" });
   };
 
-  // FORM HANDLERS
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  // 📁 Handle Icon Upload & Auto Size Calculation
+  const handleFileUpload = (e, targetField) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2) + " MB";
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setForm((prev) => ({
+        ...prev,
+        [targetField]: reader.result,
+        size: prev.size || fileSizeMB
+      }));
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleScreenshotChange = (index, value) => {
-    const updatedScreenshots = [...form.screenshots];
-    updatedScreenshots[index] = value;
-    setForm({ ...form, screenshots: updatedScreenshots });
+  // 📁 Handle Screenshot Uploads
+  const handleScreenshotUpload = (index, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const updated = [...form.screenshots];
+      updated[index] = reader.result;
+      setForm({ ...form, screenshots: updated });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmitApp = async (e) => {
@@ -162,10 +248,18 @@ export default function Admin() {
         await updateDoc(doc(db, "apps", editingId), form);
         alert("App updated successfully!");
       } else {
-        await addDoc(collection(db, "apps"), form);
+        await addDoc(collection(db, "apps"), {
+          ...form,
+          downloadCount: 0,
+          analytics: {
+            devices: { Android: 0, iOS: 0, Windows: 0, Other: 0 },
+            locations: {}
+          }
+        });
         alert("App published successfully!");
       }
       resetForm();
+      setShowFormModal(false);
       fetchApps();
     } catch (err) {
       console.error("Error saving app:", err);
@@ -179,7 +273,7 @@ export default function Admin() {
       title: app.title || "",
       developerName: app.developerName || "",
       developerLink: app.developerLink || "",
-      category: app.category || "Tools",
+      category: app.category || categories[0] || "Business",
       version: app.version || "1.0.0",
       androidReq: app.androidReq || "Android 8.0+",
       size: app.size || "",
@@ -191,7 +285,7 @@ export default function Admin() {
       descMM: app.descMM || "",
       screenshots: app.screenshots || ["", "", ""]
     });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setShowFormModal(true);
   };
 
   const handleDelete = async (id) => {
@@ -212,7 +306,7 @@ export default function Admin() {
       title: "",
       developerName: "",
       developerLink: "",
-      category: "Tools",
+      category: categories[0] || "Business",
       version: "1.0.0",
       androidReq: "Android 8.0+",
       size: "",
@@ -226,41 +320,18 @@ export default function Admin() {
     });
   };
 
-  const handleSaveSettings = async (e) => {
-    e.preventDefault();
-    try {
-      await setDoc(doc(db, "settings", "store"), settings);
-      alert("Store settings saved!");
-    } catch (err) {
-      console.error("Error saving settings:", err);
-    }
-  };
-
-  const handleSaveBanner = async (e) => {
-    e.preventDefault();
-    try {
-      await setDoc(doc(db, "announcements", "banner"), { text: bannerText, enabled: true });
-      alert("Announcement banner updated!");
-    } catch (err) {
-      console.error("Error saving banner:", err);
-    }
-  };
-
-  // PAGINATION LOGIC
   const indexOfLastApp = currentPage * appsPerPage;
   const indexOfFirstApp = indexOfLastApp - appsPerPage;
   const currentApps = apps.slice(indexOfFirstApp, indexOfLastApp);
   const totalPages = Math.ceil(apps.length / appsPerPage);
 
-  // 🔒 ADMIN LOGIN SCREEN
+  // 🔒 LOGIN SCREEN
   if (!isAuthenticated) {
     return (
       <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f172a", fontFamily: "'Plus Jakarta Sans', sans-serif", padding: "20px" }}>
         <div style={{ background: "#ffffff", padding: "32px", borderRadius: "20px", width: "100%", maxWidth: "380px", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.3)", textAlign: "center" }}>
           <div style={{ width: "50px", height: "50px", background: "linear-gradient(135deg, #f59e0b, #d97706)", borderRadius: "14px", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "24px", fontWeight: "900", margin: "0 auto 16px" }}>L</div>
-          <h2 style={{ margin: "0 0 6px 0", fontSize: "1.4rem", fontWeight: "800", color: "#0f172a" }}>Admin Access</h2>
-          <p style={{ margin: "0 0 20px 0", fontSize: "12px", color: "#64748b" }}>Default Password: <code style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px", color: "#d97706", fontWeight: "700" }}>admin123</code></p>
-
+          <h2 style={{ margin: "0 0 20px 0", fontSize: "1.4rem", fontWeight: "800", color: "#0f172a" }}>Admin Access</h2>
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <input
               type="password"
@@ -279,250 +350,223 @@ export default function Admin() {
     );
   }
 
-  // 📱 DASHBOARD LAYOUT
+  // 📱 DASHBOARD
   return (
     <div style={{ minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", background: "#f8fafc" }}>
-      
-      {/* TOP HEADER */}
-      <header style={{ background: "#0f172a", color: "#ffffff", padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", sticky: "top", top: 0, zIndex: 50 }}>
+      <header style={{ background: "#0f172a", color: "#ffffff", padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ width: "32px", height: "32px", background: "linear-gradient(135deg, #f59e0b, #d97706)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "900", fontSize: "16px" }}>L</div>
           <span style={{ fontWeight: "800", fontSize: "1.1rem" }}>{settings.storeName || "LannApp"} Admin</span>
         </div>
-
         <button onClick={() => setIsAuthenticated(false)} style={{ background: "#1e293b", color: "#f87171", border: "1px solid #334155", padding: "6px 12px", borderRadius: "8px", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}>
           Logout 🚪
         </button>
       </header>
 
-      {/* NAVIGATION TABS */}
-      <div style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "10px 16px", display: "flex", gap: "8px", overflowX: "auto" }}>
-        <button
-          onClick={() => setActiveTab("apps")}
-          style={{
-            padding: "8px 14px",
-            borderRadius: "8px",
-            border: "none",
-            background: activeTab === "apps" ? "#d97706" : "#f1f5f9",
-            color: activeTab === "apps" ? "#ffffff" : "#475569",
-            fontWeight: "700",
-            fontSize: "12px",
-            cursor: "pointer",
-            whiteSpace: "nowrap"
-          }}
-        >
-          📱 Apps ({apps.length})
+      {/* TOP NAVIGATION */}
+      <div style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "10px 16px", display: "flex", gap: "8px", alignItems: "center", overflowX: "auto" }}>
+        <button onClick={() => setActiveTab("apps")} style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: activeTab === "apps" ? "#d97706" : "#f1f5f9", color: activeTab === "apps" ? "#ffffff" : "#475569", fontWeight: "700", fontSize: "12px", cursor: "pointer" }}>
+          📋 Uploaded Apps ({apps.length})
+        </button>
+        <button onClick={() => setActiveTab("settings")} style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: activeTab === "settings" ? "#d97706" : "#f1f5f9", color: activeTab === "settings" ? "#ffffff" : "#475569", fontWeight: "700", fontSize: "12px", cursor: "pointer" }}>
+          ⚙️ Settings & Categories
         </button>
 
-        <button
-          onClick={() => setActiveTab("settings")}
-          style={{
-            padding: "8px 14px",
-            borderRadius: "8px",
-            border: "none",
-            background: activeTab === "settings" ? "#d97706" : "#f1f5f9",
-            color: activeTab === "settings" ? "#ffffff" : "#475569",
-            fontWeight: "700",
-            fontSize: "12px",
-            cursor: "pointer",
-            whiteSpace: "nowrap"
-          }}
-        >
-          ⚙️ Settings & Password
-        </button>
+        <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
+          <a 
+            href="/" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            style={{ textDecoration: "none", background: "#3b82f6", color: "#ffffff", padding: "8px 14px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}>
+            👁️ View Live Store
+          </a>
 
-        <button
-          onClick={() => setActiveTab("banner")}
-          style={{
-            padding: "8px 14px",
-            borderRadius: "8px",
-            border: "none",
-            background: activeTab === "banner" ? "#d97706" : "#f1f5f9",
-            color: activeTab === "banner" ? "#ffffff" : "#475569",
-            fontWeight: "700",
-            fontSize: "12px",
-            cursor: "pointer",
-            whiteSpace: "nowrap"
-          }}
-        >
-          📢 Banner
-        </button>
-
-        <a href="/" target="_blank" rel="noreferrer" style={{ marginLeft: "auto", color: "#d97706", textDecoration: "none", fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>
-          Live Store ↗
-        </a>
+          <button 
+            onClick={() => { resetForm(); setShowFormModal(true); }}
+            style={{ background: "#10b981", color: "#ffffff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+            ➕ Add New App
+          </button>
+        </div>
       </div>
 
-      {/* MAIN CONTENT */}
       <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "20px 16px" }}>
         
-        {/* TAB 1: APPS */}
+        {/* TAB 1: UPLOADED APPS LIST */}
         {activeTab === "apps" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-            
-            <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "800", color: "#0f172a" }}>
-                  {editingId ? "✏️ Edit Application" : "➕ Upload New Application"}
-                </h3>
-                {editingId && (
-                  <button onClick={resetForm} style={{ background: "#f1f5f9", border: "none", padding: "4px 10px", borderRadius: "6px", fontSize: "11px", cursor: "pointer", fontWeight: "700" }}>
-                    Cancel
-                  </button>
-                )}
-              </div>
-
-              <form onSubmit={handleSubmitApp} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <input type="text" name="title" placeholder="App Title *" value={form.title} onChange={handleChange} required style={inputStyle} />
-                
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                  <input type="text" name="developerName" placeholder="Developer Name" value={form.developerName} onChange={handleChange} style={inputStyle} />
-                  <input type="text" name="developerLink" placeholder="Developer Link (URL)" value={form.developerLink} onChange={handleChange} style={inputStyle} />
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
-                  <select name="category" value={form.category} onChange={handleChange} style={inputStyle}>
-                    <option value="Tools">Tools</option>
-                    <option value="Games">Games</option>
-                    <option value="Social">Social</option>
-                    <option value="Entertainment">Entertainment</option>
-                    <option value="Productivity">Productivity</option>
-                    <option value="Business">Business</option>
-                    <option value="Education">Education</option>
-                  </select>
-                  <input type="text" name="version" placeholder="Version (1.0.0)" value={form.version} onChange={handleChange} style={inputStyle} />
-                  <input type="text" name="androidReq" placeholder="Android (8.0+)" value={form.androidReq} onChange={handleChange} style={inputStyle} />
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                  <input type="text" name="size" placeholder="App Size (MB)" value={form.size} onChange={handleChange} style={inputStyle} />
-                  <input type="text" name="imageUrl" placeholder="App Icon Image URL *" value={form.imageUrl} onChange={handleChange} required style={inputStyle} />
-                </div>
-
-                <input type="text" name="driveUrl" placeholder="Primary Download Link (Drive/Mega) *" value={form.driveUrl} onChange={handleChange} required style={inputStyle} />
-                <input type="text" name="driveUrl2" placeholder="Mirror Link 1 (Optional)" value={form.driveUrl2} onChange={handleChange} style={inputStyle} />
-                <input type="text" name="driveUrl3" placeholder="Mirror Link 2 (Optional)" value={form.driveUrl3} onChange={handleChange} style={inputStyle} />
-
-                <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>Screenshots Image URLs</label>
-                {form.screenshots.map((s, idx) => (
-                  <input key={idx} type="text" placeholder={`Screenshot ${idx + 1} URL`} value={s} onChange={(e) => handleScreenshotChange(idx, e.target.value)} style={inputStyle} />
-                ))}
-
-                <textarea name="descEN" placeholder="Description (English)" value={form.descEN} onChange={handleChange} rows={2} style={inputStyle}></textarea>
-                <textarea name="descMM" placeholder="Description (Myanmar)" value={form.descMM} onChange={handleChange} rows={2} style={inputStyle}></textarea>
-
-                <button type="submit" style={{ background: "#d97706", color: "#fff", padding: "12px", border: "none", borderRadius: "10px", fontWeight: "800", cursor: "pointer", fontSize: "13px" }}>
-                  {editingId ? "Update App Data" : "Publish App"}
-                </button>
-              </form>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>📋 Manage Applications & Tracking</h3>
             </div>
 
-            <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-              <h3 style={{ margin: "0 0 16px 0", fontSize: "1.1rem", fontWeight: "800", color: "#0f172a" }}>
-                📋 Uploaded Apps ({apps.length})
-              </h3>
-
-              {apps.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "30px", color: "#94a3b8", fontSize: "13px" }}>No applications uploaded yet.</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {currentApps.map((app) => (
-                    <div key={app.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", border: "1px solid #e2e8f0", borderRadius: "10px", background: "#f8fafc" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", overflow: "hidden" }}>
-                        <img src={app.imageUrl || "https://via.placeholder.com/40"} alt="" style={{ width: "38px", height: "38px", borderRadius: "8px", objectFit: "cover", flexShrink: 0 }} />
+            {apps.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px", background: "#fff", borderRadius: "16px", color: "#94a3b8" }}>No applications found. Click "Add New App" to publish.</div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
+                {currentApps.map((app) => (
+                  <div key={app.id} style={{ background: "#ffffff", padding: "16px", borderRadius: "14px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
+                        <img src={app.imageUrl || "https://via.placeholder.com/50"} alt="" style={{ width: "48px", height: "48px", borderRadius: "10px", objectFit: "cover" }} />
                         <div style={{ overflow: "hidden" }}>
-                          <div style={{ fontWeight: "800", fontSize: "13px", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{app.title}</div>
-                          <div style={{ fontSize: "10px", color: "#64748b", display: "flex", gap: "6px", alignItems: "center", marginTop: "2px" }}>
-                            <span style={{ background: "#e2e8f0", padding: "2px 4px", borderRadius: "4px", color: "#334155", fontWeight: "700" }}>{app.category || "Tools"}</span>
-                            <span>v{app.version || "1.0.0"}</span>
-                          </div>
+                          <div style={{ fontWeight: "800", fontSize: "14px", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{app.title}</div>
+                          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{app.category} • v{app.version}</div>
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-                        <button onClick={() => handleEdit(app)} style={{ background: "#3b82f6", color: "#fff", border: "none", padding: "6px 8px", borderRadius: "6px", fontSize: "11px", cursor: "pointer", fontWeight: "700" }}>Edit</button>
-                        <button onClick={() => handleDelete(app.id)} style={{ background: "#ef4444", color: "#fff", border: "none", padding: "6px 8px", borderRadius: "6px", fontSize: "11px", cursor: "pointer", fontWeight: "700" }}>Delete</button>
+                      <div style={{ background: "#f8fafc", padding: "10px", borderRadius: "8px", border: "1px solid #f1f5f9", marginBottom: "12px", fontSize: "11px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "700" }}>
+                          <span>📥 Downloads:</span>
+                          <span style={{ color: "#d97706", fontWeight: "800" }}>{app.downloadCount || 0} times</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                          <span>📱 Top Devices:</span>
+                          <span>Android ({app.analytics?.devices?.Android || 0}), iOS ({app.analytics?.devices?.iOS || 0})</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
+                          <span>📍 Main Location:</span>
+                          <span>{Object.keys(app.analytics?.locations || {}).length > 0 ? Object.keys(app.analytics.locations)[0] : "Myanmar"}</span>
+                        </div>
                       </div>
                     </div>
-                  ))}
 
-                  {totalPages > 1 && (
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", marginTop: "14px" }}>
-                      <button onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage === 1} style={{ border: "1px solid #cbd5e1", background: currentPage === 1 ? "#f1f5f9" : "#ffffff", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>Prev</button>
-                      <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>{currentPage} / {totalPages}</span>
-                      <button onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} style={{ border: "1px solid #cbd5e1", background: currentPage === totalPages ? "#f1f5f9" : "#ffffff", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>Next</button>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button onClick={() => handleEdit(app)} style={{ flex: 1, background: "#3b82f6", color: "#fff", border: "none", padding: "8px", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>✏️ Edit</button>
+                      <button onClick={() => handleDelete(app.id)} style={{ flex: 1, background: "#ef4444", color: "#fff", border: "none", padding: "8px", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>🗑️ Delete</button>
                     </div>
-                  )}
+                  </div>
+                ))}
+              </div>
+            )}
 
-                </div>
-              )}
-            </div>
-
+            {totalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginTop: "16px" }}>
+                <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1} style={{ border: "1px solid #cbd5e1", background: "#fff", padding: "6px 12px", borderRadius: "6px", fontSize: "12px" }}>Prev</button>
+                <span style={{ fontSize: "12px", fontWeight: "700", alignSelf: "center" }}>{currentPage} / {totalPages}</span>
+                <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} style={{ border: "1px solid #cbd5e1", background: "#fff", padding: "6px 12px", borderRadius: "6px", fontSize: "12px" }}>Next</button>
+              </div>
+            )}
           </div>
         )}
 
-        {/* TAB 2: SETTINGS & PASSWORD CHANGE */}
+        {/* TAB 2: SETTINGS & CUSTOM CATEGORY MANAGEMENT */}
         {activeTab === "settings" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             
-            <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-              <h3 style={{ margin: "0 0 16px 0", fontSize: "1.1rem", fontWeight: "800", color: "#0f172a" }}>⚙️ General Store Settings</h3>
-              <form onSubmit={handleSaveSettings} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>Store Name</label>
-                  <input type="text" value={settings.storeName} onChange={(e) => setSettings({ ...settings, storeName: e.target.value })} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>Support Email</label>
-                  <input type="email" value={settings.supportEmail} onChange={(e) => setSettings({ ...settings, supportEmail: e.target.value })} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>Telegram Support Link</label>
-                  <input type="text" value={settings.telegramLink} onChange={(e) => setSettings({ ...settings, telegramLink: e.target.value })} style={inputStyle} />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
-                  <input type="checkbox" id="mMode" checked={settings.maintenanceMode} onChange={(e) => setSettings({ ...settings, maintenanceMode: e.target.checked })} />
-                  <label htmlFor="mMode" style={{ fontSize: "12px", fontWeight: "700", color: "#0f172a" }}>Enable Maintenance Mode</label>
-                </div>
-                <button type="submit" style={{ background: "#d97706", color: "#fff", padding: "10px", border: "none", borderRadius: "8px", fontWeight: "800", cursor: "pointer", marginTop: "8px", fontSize: "13px" }}>Save Settings</button>
+            <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid #e2e8f0" }}>
+              <h3 style={{ margin: "0 0 6px 0", fontSize: "1.1rem", fontWeight: "800" }}>📂 Custom App Categories</h3>
+              <p style={{ margin: "0 0 16px 0", fontSize: "12px", color: "#64748b" }}>Add, customize, or remove categories. Categories are ordered alphabetically.</p>
+              
+              <form onSubmit={handleAddCategory} style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+                <input 
+                  type="text" 
+                  placeholder="Enter custom category name..." 
+                  value={newCategoryInput} 
+                  onChange={(e) => setNewCategoryInput(e.target.value)} 
+                  style={inputStyle} 
+                />
+                <button type="submit" style={{ background: "#10b981", color: "#fff", padding: "8px 16px", border: "none", borderRadius: "8px", fontWeight: "800", fontSize: "12px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                  ➕ Add Category
+                </button>
               </form>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {categories.map((cat, idx) => (
+                  <span key={idx} style={{ background: "#f1f5f9", padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
+                    {cat}
+                    <button onClick={() => handleDeleteCategory(cat)} style={{ border: "none", background: "none", color: "#ef4444", cursor: "pointer", fontWeight: "800", fontSize: "12px", padding: 0 }}>✕</button>
+                  </span>
+                ))}
+              </div>
             </div>
 
-            <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-              <h3 style={{ margin: "0 0 16px 0", fontSize: "1.1rem", fontWeight: "800", color: "#0f172a" }}>🔑 Change Admin Password</h3>
+            <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid #e2e8f0" }}>
+              <h3 style={{ margin: "0 0 16px 0", fontSize: "1.1rem", fontWeight: "800" }}>🔑 Change Admin Password</h3>
               <form onSubmit={handleChangePassword} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>Current Password</label>
-                  <input type="password" placeholder="Current Password" value={passForm.currentPass} onChange={(e) => setPassForm({ ...passForm, currentPass: e.target.value })} required style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>New Password</label>
-                  <input type="password" placeholder="New Password" value={passForm.newPass} onChange={(e) => setPassForm({ ...passForm, newPass: e.target.value })} required style={inputStyle} />
-                </div>
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: "700", color: "#64748b" }}>Confirm New Password</label>
-                  <input type="password" placeholder="Confirm New Password" value={passForm.confirmPass} onChange={(e) => setPassForm({ ...passForm, confirmPass: e.target.value })} required style={inputStyle} />
-                </div>
-                <button type="submit" style={{ background: "#0f172a", color: "#fff", padding: "10px", border: "none", borderRadius: "8px", fontWeight: "800", cursor: "pointer", marginTop: "8px", fontSize: "13px" }}>Update Password</button>
+                <input type="password" placeholder="Current Password" value={passForm.currentPass} onChange={(e) => setPassForm({ ...passForm, currentPass: e.target.value })} required style={inputStyle} />
+                <input type="password" placeholder="New Password" value={passForm.newPass} onChange={(e) => setPassForm({ ...passForm, newPass: e.target.value })} required style={inputStyle} />
+                <input type="password" placeholder="Confirm Password" value={passForm.confirmPass} onChange={(e) => setPassForm({ ...passForm, confirmPass: e.target.value })} required style={inputStyle} />
+                <button type="submit" style={{ background: "#0f172a", color: "#fff", padding: "10px", border: "none", borderRadius: "8px", fontWeight: "800", cursor: "pointer" }}>Update Password</button>
               </form>
             </div>
-
-          </div>
-        )}
-
-        {/* TAB 3: BANNER */}
-        {activeTab === "banner" && (
-          <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-            <h3 style={{ margin: "0 0 16px 0", fontSize: "1.1rem", fontWeight: "800", color: "#0f172a" }}>📢 Announcement Banner Text</h3>
-            <form onSubmit={handleSaveBanner} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <textarea rows={3} value={bannerText} onChange={(e) => setBannerText(e.target.value)} placeholder="Type announcement text..." style={inputStyle}></textarea>
-              <button type="submit" style={{ background: "#d97706", color: "#fff", padding: "10px", border: "none", borderRadius: "8px", fontWeight: "800", cursor: "pointer", fontSize: "13px" }}>Update Banner</button>
-            </form>
           </div>
         )}
 
       </main>
 
+      {/* ➕ MODAL FORM FOR NEW / EDIT APP */}
+      {showFormModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", zIndex: 1000 }}>
+          <div style={{ background: "#ffffff", borderRadius: "16px", padding: "24px", width: "100%", maxWidth: "600px", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ margin: 0, fontWeight: "800", fontSize: "1.2rem", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ color: "#d97706" }}>➕</span> {editingId ? "Edit Application" : "Upload New Application"}
+              </h3>
+              <button onClick={() => setShowFormModal(false)} style={{ border: "none", background: "none", fontSize: "18px", cursor: "pointer", color: "#64748b" }}>✕</button>
+            </div>
+
+            <form onSubmit={handleSubmitApp} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <input type="text" name="title" placeholder="App Title *" value={form.title} onChange={handleChange} required style={inputStyle} />
+              
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <input type="text" name="developerName" placeholder="Developer Name" value={form.developerName} onChange={handleChange} style={inputStyle} />
+                <input type="text" name="developerLink" placeholder="Developer Link (URL)" value={form.developerLink} onChange={handleChange} style={inputStyle} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                {/* SORTED CUSTOM CATEGORY DROPDOWN */}
+                <select name="category" value={form.category} onChange={handleChange} style={inputStyle}>
+                  {categories.map((cat, i) => (
+                    <option key={i} value={cat}>{cat}</option>
+                  ))}
+                </select>
+
+                <input type="text" name="version" placeholder="1.0.0" value={form.version} onChange={handleChange} style={inputStyle} />
+                <input type="text" name="androidReq" placeholder="Android 8.0+" value={form.androidReq} onChange={handleChange} style={inputStyle} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <input type="text" name="size" placeholder="App Size (e.g., 25 MB)" value={form.size} onChange={handleChange} style={inputStyle} />
+                
+                <div>
+                  <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "700" }}>Upload Icon *</label>
+                  <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "imageUrl")} style={inputStyle} />
+                </div>
+              </div>
+
+              {form.imageUrl && (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <img src={form.imageUrl} alt="Preview" style={{ width: "40px", height: "40px", borderRadius: "8px", objectFit: "cover" }} />
+                  <span style={{ fontSize: "11px", color: "#10b981", fontWeight: "700" }}>Icon Selected</span>
+                </div>
+              )}
+
+              <input type="text" name="driveUrl" placeholder="Primary Download Link (Drive/Mega) *" value={form.driveUrl} onChange={handleChange} required style={inputStyle} />
+              <input type="text" name="driveUrl2" placeholder="Mirror Link 1 (Optional)" value={form.driveUrl2} onChange={handleChange} style={inputStyle} />
+              <input type="text" name="driveUrl3" placeholder="Mirror Link 2 (Optional)" value={form.driveUrl3} onChange={handleChange} style={inputStyle} />
+
+              <div style={{ textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", margin: "4px 0" }}>
+                Upload Screenshots (Optional)
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {form.screenshots.map((s, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input type="file" accept="image/*" onChange={(e) => handleScreenshotUpload(idx, e)} style={inputStyle} />
+                    {s && <img src={s} alt="Screenshot" style={{ width: "32px", height: "32px", borderRadius: "6px", objectFit: "cover" }} />}
+                  </div>
+                ))}
+              </div>
+
+              <textarea name="descEN" placeholder="Description (English)" value={form.descEN} onChange={handleChange} rows={3} style={inputStyle}></textarea>
+              <textarea name="descMM" placeholder="Description (Myanmar)" value={form.descMM} onChange={handleChange} rows={3} style={inputStyle}></textarea>
+
+              <button type="submit" style={{ background: "#d97706", color: "#fff", padding: "12px", border: "none", borderRadius: "8px", fontWeight: "800", cursor: "pointer", fontSize: "14px", marginTop: "8px" }}>
+                {editingId ? "Update App" : "Publish App"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
