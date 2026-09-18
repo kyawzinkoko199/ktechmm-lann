@@ -73,16 +73,33 @@ export default function Home() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  // 🚀 FAST & RELIABLE DATA FETCHING (LocalStorage First + Firestore Sync)
   useEffect(() => {
     const fetchData = async () => {
+      // 1. Instant load from LocalStorage
+      const localData = localStorage.getItem("lann_apps_cache");
+      if (localData) {
+        try {
+          setApps(JSON.parse(localData));
+        } catch (e) {
+          console.error("Local storage parse error:", e);
+        }
+      }
+
+      // 2. Safely fetch updated data from Firestore
       try {
         const querySnapshot = await getDocs(collection(db, "apps"));
         const list = querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setApps(list);
+
+        if (list.length > 0) {
+          setApps(list);
+          localStorage.setItem("lann_apps_cache", JSON.stringify(list));
+        }
       } catch (err) {
         console.error("Error fetching home data:", err);
       }
     };
+
     fetchData();
   }, []);
 
@@ -109,7 +126,7 @@ export default function Home() {
         {/* HEADER NAVIGATION & ACTIONS */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           
-          {/* TELEGRAM LINK IN HEADER */}
+          {/* TELEGRAM LINK */}
           <a
             href="https://t.me/lannappMM"
             target="_blank"
@@ -180,8 +197,14 @@ export default function Home() {
                 <img src={app.imageUrl || "https://via.placeholder.com/80"} alt={app.title} style={{ width: "68px", height: "68px", borderRadius: "16px", objectFit: "cover", marginBottom: "10px" }} />
                 <h3 style={{ margin: "0 0 4px 0", fontSize: "1rem", fontWeight: "800", color: "#0f172a" }}>{app.title}</h3>
                 <p style={{ margin: "0 0 8px 0", fontSize: "11px", color: "#d97706", fontWeight: "700" }}>By {app.developerName || "Developer"}</p>
+                
+                {/* ⚡ CARD BADGE: App Type အလိုက် Dynamic ပြသခြင်း */}
                 <span style={{ display: "inline-block", background: "#f1f5f9", padding: "3px 8px", borderRadius: "10px", fontSize: "10px", color: "#475569", fontWeight: "700" }}>
-                  v{app.version || "1.0.0"} • {app.androidReq || "8.0+"}
+                  {app.appType === "Window App"
+                    ? `💻 ${app.architecture || "PC"}`
+                    : app.appType === "Website"
+                    ? "🌐 Website"
+                    : `v${app.version || "1.0.0"} ${app.androidReq && app.androidReq !== "-" ? `• ${app.androidReq}` : ""}`}
                 </span>
               </div>
             ))}
@@ -225,27 +248,77 @@ export default function Home() {
                 )}
               </div>
 
+              {/* SPECIFICATIONS BOX */}
               <div style={{ background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "14px", padding: "12px" }}>
                 <h4 style={{ margin: "0 0 8px 0", fontSize: "10px", color: "#b45309", fontWeight: "800", textAlign: "center", letterSpacing: "0.5px" }}>SPECIFICATIONS</h4>
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "11px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#64748b" }}>Android:</span><span style={{ fontWeight: "700", color: "#d97706" }}>{selectedApp.androidReq || "8.0+"}</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#64748b" }}>Version:</span><span style={{ fontWeight: "700", color: "#334155" }}>{selectedApp.version || "1.0"}</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#64748b" }}>Size:</span><span style={{ fontWeight: "700", color: "#334155" }}>{selectedApp.size ? `${selectedApp.size} MB` : "N/A"}</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#64748b" }}>Category:</span><span style={{ fontWeight: "700", color: "#334155" }}>{selectedApp.category || "General"}</span></div>
+                  
+                  {/* 📱 1. Android App Specification */}
+                  {selectedApp.appType === "Android App" && selectedApp.androidReq && selectedApp.androidReq !== "-" && (
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Android:</span>
+                      <span style={{ fontWeight: "700", color: "#d97706" }}>{selectedApp.androidReq}</span>
+                    </div>
+                  )}
+
+                  {/* 💻 2. Window App Specification */}
+                  {selectedApp.appType === "Window App" && (
+                    <>
+                      {selectedApp.osReq && (
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "#64748b" }}>OS:</span>
+                          <span style={{ fontWeight: "700", color: "#d97706" }}>{selectedApp.osReq}</span>
+                        </div>
+                      )}
+                      {selectedApp.architecture && (
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "#64748b" }}>Arch:</span>
+                          <span style={{ fontWeight: "700", color: "#2563eb" }}>{selectedApp.architecture}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Version */}
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#64748b" }}>Version:</span>
+                    <span style={{ fontWeight: "700", color: "#334155" }}>{selectedApp.version || "1.0"}</span>
+                  </div>
+
+                  {/* Size (Website မဟုတ်ပါကမှ ပြမည်) */}
+                  {selectedApp.size && selectedApp.size !== "-" && selectedApp.size !== "N/A" && (
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#64748b" }}>Size:</span>
+                      <span style={{ fontWeight: "700", color: "#334155" }}>{selectedApp.size} MB</span>
+                    </div>
+                  )}
+
+                  {/* Category */}
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#64748b" }}>Category:</span>
+                    <span style={{ fontWeight: "700", color: "#334155" }}>{selectedApp.category || "General"}</span>
+                  </div>
+
                 </div>
               </div>
 
             </div>
 
-            {/* 📝 ABOUT THIS APP */}
+            {/* 📝 ABOUT SECTION */}
             <div style={{ background: "#f8fafc", borderRadius: "14px", padding: "16px", marginBottom: "16px" }}>
-              <h3 style={{ margin: "0 0 8px 0", fontSize: "13px", fontWeight: "800", color: "#0f172a" }}>ABOUT THIS APP</h3>
+              <h3 style={{ margin: "0 0 8px 0", fontSize: "13px", fontWeight: "800", color: "#0f172a" }}>
+                {selectedApp.appType === "Website"
+                  ? "ABOUT THIS WEBSITE"
+                  : selectedApp.appType === "Window App"
+                  ? "ABOUT THIS SOFTWARE"
+                  : "ABOUT THIS APP"}
+              </h3>
               <p style={{ margin: 0, fontSize: "12px", color: "#475569", lineHeight: "1.6", whiteSpace: "pre-line" }}>
                 {lang === "MM" ? (selectedApp.descMM || selectedApp.descEN) : (selectedApp.descEN || selectedApp.descMM)}
               </p>
             </div>
 
-            {/* 📥 DIRECT DOWNLOAD BUTTONS (NO ADS) */}
+            {/* 📥 DOWNLOAD / VISIT BUTTONS */}
             <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: "8px" }}>
               {(selectedApp.driveUrl || selectedApp.driveUrl1) && (
                 <a
@@ -254,7 +327,7 @@ export default function Home() {
                   rel="noreferrer"
                   style={{ flex: 1, textDecoration: "none", background: "#d97706", color: "#ffffff", padding: "12px", borderRadius: "10px", textAlign: "center", fontWeight: "800", fontSize: "12px" }}
                 >
-                  🚀 Download Link 1
+                  🚀 {selectedApp.appType === "Website" ? "Visit Website" : selectedApp.appType === "Window App" ? "Download Setup 1" : "Download Link 1"}
                 </a>
               )}
               {selectedApp.driveUrl2 && (
@@ -264,7 +337,7 @@ export default function Home() {
                   rel="noreferrer"
                   style={{ flex: 1, textDecoration: "none", background: "#0f172a", color: "#ffffff", padding: "12px", borderRadius: "10px", textAlign: "center", fontWeight: "800", fontSize: "12px" }}
                 >
-                  📥 Download Link 2
+                  📥 {selectedApp.appType === "Window App" ? "Download Setup 2" : "Download Link 2"}
                 </a>
               )}
               {selectedApp.driveUrl3 && (
@@ -274,7 +347,7 @@ export default function Home() {
                   rel="noreferrer"
                   style={{ flex: 1, textDecoration: "none", background: "#2563eb", color: "#ffffff", padding: "12px", borderRadius: "10px", textAlign: "center", fontWeight: "800", fontSize: "12px" }}
                 >
-                  ⚡ Download Link 3
+                  ⚡ {selectedApp.appType === "Window App" ? "Download Setup 3" : "Download Link 3"}
                 </a>
               )}
             </div>

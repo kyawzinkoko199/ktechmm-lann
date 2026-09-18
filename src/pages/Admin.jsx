@@ -13,12 +13,58 @@ import {
 
 const DEFAULT_CATEGORIES = ["Business", "Entertainment", "Games", "Productivity", "Social", "Tools"];
 
+const inputStyle = {
+  width: "100%",
+  padding: "9px 12px",
+  borderRadius: "8px",
+  border: "1px solid #cbd5e1",
+  fontSize: "12px",
+  outline: "none",
+  boxSizing: "border-box"
+};
+
+// Helper utility to compress images via HTML5 Canvas to prevent Firestore 1MB document limits
+const compressImage = (file, maxWidth = 800, maxHeight = 800, quality = 0.7) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
-  const [adminPassword, setAdminPassword] = useState(() => {
-    return localStorage.getItem("lann_admin_pass") || "17041995";
-  });
+  const [adminPassword, setAdminPassword] = useState("");
 
   const [activeTab, setActiveTab] = useState("apps");
   const [apps, setApps] = useState([]);
@@ -27,15 +73,15 @@ export default function Admin() {
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  // 🌐 appType ("App" | "Website") ပါဝင်သော Initial Form State
   const initialFormState = {
     title: "",
     developerName: "",
     developerLink: "",
     category: "Business",
-    appType: "App", // "App" သို့မဟုတ် "Website"
+    appType: "App", // Options: "App", "Website", "Windows"
     version: "1.0.0",
     androidReq: "Android 8.0+",
+    windowsReq: "Windows 10/11 (64-bit)",
     size: "",
     imageUrl: "",
     driveUrl: "",
@@ -47,7 +93,6 @@ export default function Admin() {
   };
 
   const [form, setForm] = useState(initialFormState);
-
   const [currentPage, setCurrentPage] = useState(1);
   const appsPerPage = 6;
 
@@ -72,16 +117,33 @@ export default function Admin() {
     }
   }, [isAuthenticated]);
 
+  // Adjust pagination page if items decrease
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(apps.length / appsPerPage));
+    if (currentPage > maxPage) {
+      setCurrentPage(maxPage);
+    }
+  }, [apps, currentPage]);
+
+  // Handle Window Level Tool Form ESC key shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && showFormModal) {
+        setShowFormModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showFormModal]);
+
   const fetchPassword = async () => {
     try {
       const docSnap = await getDoc(doc(db, "settings", "auth"));
       if (docSnap.exists() && docSnap.data().password) {
-        const dbPass = String(docSnap.data().password).trim();
-        setAdminPassword(dbPass);
-        localStorage.setItem("lann_admin_pass", dbPass);
+        setAdminPassword(String(docSnap.data().password).trim());
       }
     } catch (err) {
-      console.warn("Firestore Auth error, using local fallback:", err);
+      console.warn("Firestore Auth error:", err);
     }
   };
 
@@ -110,9 +172,6 @@ export default function Admin() {
       if (docSnap.exists() && docSnap.data().list) {
         const sortedCategories = [...docSnap.data().list].sort((a, b) => a.localeCompare(b));
         setCategories(sortedCategories);
-        if (sortedCategories.length > 0) {
-          setForm((prev) => ({ ...prev, category: sortedCategories[0] }));
-        }
       }
     } catch (err) {
       console.error("Error fetching categories:", err);
@@ -161,20 +220,14 @@ export default function Admin() {
   const handleLogin = async (e) => {
     e.preventDefault();
     const enteredPass = passwordInput.trim();
-    
-    if (enteredPass === adminPassword.trim()) {
-      setIsAuthenticated(true);
-      return;
-    }
 
     try {
       const docSnap = await getDoc(doc(db, "settings", "auth"));
-      if (docSnap.exists()) {
-        const dbPass = String(docSnap.data().password).trim();
-        if (enteredPass === dbPass) {
-          setIsAuthenticated(true);
-          return;
-        }
+      const validPassword = docSnap.exists() ? String(docSnap.data().password).trim() : adminPassword;
+
+      if (enteredPass === validPassword) {
+        setIsAuthenticated(true);
+        return;
       }
     } catch (err) {
       console.error(err);
@@ -195,48 +248,51 @@ export default function Admin() {
     }
 
     const targetPass = passForm.newPass.trim();
-    localStorage.setItem("lann_admin_pass", targetPass);
     setAdminPassword(targetPass);
 
     try {
       await setDoc(doc(db, "settings", "auth"), { password: targetPass }, { merge: true });
       alert("✅ Password changed successfully!");
     } catch (err) {
-      alert("⚠️ Updated locally, Firestore blocked.");
+      alert("⚠️ Error updating password in Firestore.");
     }
     setPassForm({ currentPass: "", newPass: "", confirmPass: "" });
   };
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handleFileUpload = (e, targetField) => {
+  const handleFileUpload = async (e, targetField) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2) + " MB";
+    try {
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2) + " MB";
+      const compressedBase64 = await compressImage(file, 512, 512, 0.7);
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
       setForm((prev) => ({
         ...prev,
-        [targetField]: reader.result,
+        [targetField]: compressedBase64,
         size: prev.size || fileSizeMB
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Error compressing file:", err);
+      alert("Failed to process image file.");
+    }
   };
 
-  const handleScreenshotUpload = (index, e) => {
+  const handleScreenshotUpload = async (index, e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
+    try {
+      const compressedBase64 = await compressImage(file, 1024, 1024, 0.7);
       const updated = [...form.screenshots];
-      updated[index] = reader.result;
-      setForm({ ...form, screenshots: updated });
-    };
-    reader.readAsDataURL(file);
+      updated[index] = compressedBase64;
+      setForm((prev) => ({ ...prev, screenshots: updated }));
+    } catch (err) {
+      console.error("Error compressing screenshot:", err);
+      alert("Failed to process screenshot file.");
+    }
   };
 
   const handleSubmitApp = async (e) => {
@@ -254,14 +310,15 @@ export default function Admin() {
             locations: {}
           }
         });
-        alert(`${form.appType === "Website" ? "Website" : "App"} published successfully!`);
+        const typeLabel = form.appType === "Website" ? "Website" : form.appType === "Windows" ? "Windows App" : "Android App";
+        alert(`${typeLabel} published successfully!`);
       }
       resetForm();
       setShowFormModal(false);
       fetchApps();
     } catch (err) {
       console.error("Error saving data:", err);
-      alert("Failed to save.");
+      alert("Failed to save. Document size exceeds Firestore limits.");
     }
   };
 
@@ -275,6 +332,7 @@ export default function Admin() {
       appType: app.appType || "App",
       version: app.version || "1.0.0",
       androidReq: app.androidReq || "Android 8.0+",
+      windowsReq: app.windowsReq || "Windows 10/11 (64-bit)",
       size: app.size || "",
       imageUrl: app.imageUrl || "",
       driveUrl: app.driveUrl || "",
@@ -310,9 +368,8 @@ export default function Admin() {
   const indexOfLastApp = currentPage * appsPerPage;
   const indexOfFirstApp = indexOfLastApp - appsPerPage;
   const currentApps = apps.slice(indexOfFirstApp, indexOfLastApp);
-  const totalPages = Math.ceil(apps.length / appsPerPage);
+  const totalPages = Math.max(1, Math.ceil(apps.length / appsPerPage));
 
-  // 🔒 LOGIN SCREEN
   if (!isAuthenticated) {
     return (
       <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f172a", fontFamily: "'Plus Jakarta Sans', sans-serif", padding: "20px" }}>
@@ -337,7 +394,6 @@ export default function Admin() {
     );
   }
 
-  // 📱 DASHBOARD
   return (
     <div style={{ minHeight: "100vh", fontFamily: "'Plus Jakarta Sans', sans-serif", background: "#f8fafc" }}>
       <header style={{ background: "#0f172a", color: "#ffffff", padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -350,7 +406,6 @@ export default function Admin() {
         </button>
       </header>
 
-      {/* TOP NAVIGATION */}
       <div style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "10px 16px", display: "flex", gap: "8px", alignItems: "center", overflowX: "auto" }}>
         <button onClick={() => setActiveTab("apps")} style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: activeTab === "apps" ? "#d97706" : "#f1f5f9", color: activeTab === "apps" ? "#ffffff" : "#475569", fontWeight: "700", fontSize: "12px", cursor: "pointer" }}>
           📋 Uploaded Items ({apps.length})
@@ -360,25 +415,16 @@ export default function Admin() {
         </button>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
-          <a 
-            href="/" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            style={{ textDecoration: "none", background: "#3b82f6", color: "#ffffff", padding: "8px 14px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}>
+          <a href="/" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", background: "#3b82f6", color: "#ffffff", padding: "8px 14px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}>
             👁️ View Live Store
           </a>
-
-          <button 
-            onClick={() => { resetForm(); setShowFormModal(true); }}
-            style={{ background: "#10b981", color: "#ffffff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+          <button onClick={() => { resetForm(); setShowFormModal(true); }} style={{ background: "#10b981", color: "#ffffff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
             ➕ Add New Item
           </button>
         </div>
       </div>
 
       <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "20px 16px" }}>
-        
-        {/* TAB 1: UPLOADED APPS & WEBSITES LIST */}
         {activeTab === "apps" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -396,7 +442,7 @@ export default function Admin() {
                         <img src={app.imageUrl || "https://via.placeholder.com/50"} alt="" style={{ width: "48px", height: "48px", borderRadius: "10px", objectFit: "cover" }} />
                         <div style={{ overflow: "hidden" }}>
                           <div style={{ fontWeight: "800", fontSize: "14px", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {app.appType === "Website" ? "🌐 " : "📱 "}{app.title}
+                            {app.appType === "Website" ? "🌐 " : app.appType === "Windows" ? "💻 " : "📱 "}{app.title}
                           </div>
                           <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{app.category} • v{app.version}</div>
                         </div>
@@ -409,7 +455,7 @@ export default function Admin() {
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
                           <span>📱 Top Devices:</span>
-                          <span>Android ({app.analytics?.devices?.Android || 0}), iOS ({app.analytics?.devices?.iOS || 0})</span>
+                          <span>Android ({app.analytics?.devices?.Android || 0}), Win ({app.analytics?.devices?.Windows || 0})</span>
                         </div>
                       </div>
                     </div>
@@ -433,14 +479,12 @@ export default function Admin() {
           </div>
         )}
 
-        {/* TAB 2: SETTINGS & CUSTOM CATEGORY MANAGEMENT */}
         {activeTab === "settings" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            
             <div style={{ background: "#ffffff", padding: "20px", borderRadius: "16px", border: "1px solid #e2e8f0" }}>
               <h3 style={{ margin: "0 0 6px 0", fontSize: "1.1rem", fontWeight: "800" }}>📂 Custom App Categories</h3>
               <p style={{ margin: "0 0 16px 0", fontSize: "12px", color: "#64748b" }}>Add, customize, or remove categories. Categories are ordered alphabetically.</p>
-              
+
               <form onSubmit={handleAddCategory} style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
                 <input 
                   type="text" 
@@ -475,10 +519,8 @@ export default function Admin() {
             </div>
           </div>
         )}
-
       </main>
 
-      {/* ➕ MODAL FORM FOR NEW / EDIT APP OR WEBSITE */}
       {showFormModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", zIndex: 1000 }}>
           <div style={{ background: "#ffffff", borderRadius: "16px", padding: "24px", width: "100%", maxWidth: "600px", maxHeight: "90vh", overflowY: "auto" }}>
@@ -490,28 +532,38 @@ export default function Admin() {
             </div>
 
             <form onSubmit={handleSubmitApp} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              
-              {/* 🌐 TYPE SELECTION (App OR Website) */}
-              <div style={{ display: "flex", gap: "10px", marginBottom: "4px" }}>
-                <label style={{ flex: 1, cursor: "pointer", padding: "8px", borderRadius: "8px", border: "1px solid #cbd5e1", textAlign: "center", background: form.appType === "App" ? "#d97706" : "#f8fafc", color: form.appType === "App" ? "#fff" : "#0f172a", fontWeight: "700", fontSize: "12px" }}>
+              {/* Item Type Radio Group */}
+              <div style={{ display: "flex", gap: "8px", marginBottom: "4px" }}>
+                <label style={{ flex: 1, cursor: "pointer", padding: "8px 4px", borderRadius: "8px", border: "1px solid #cbd5e1", textAlign: "center", background: form.appType === "App" ? "#d97706" : "#f8fafc", color: form.appType === "App" ? "#fff" : "#0f172a", fontWeight: "700", fontSize: "12px" }}>
                   <input type="radio" name="appType" value="App" checked={form.appType === "App"} onChange={handleChange} style={{ display: "none" }} />
-                  📱 Application
+                  📱 Android App
                 </label>
-                <label style={{ flex: 1, cursor: "pointer", padding: "8px", borderRadius: "8px", border: "1px solid #cbd5e1", textAlign: "center", background: form.appType === "Website" ? "#d97706" : "#f8fafc", color: form.appType === "Website" ? "#fff" : "#0f172a", fontWeight: "700", fontSize: "12px" }}>
+                <label style={{ flex: 1, cursor: "pointer", padding: "8px 4px", borderRadius: "8px", border: "1px solid #cbd5e1", textAlign: "center", background: form.appType === "Windows" ? "#d97706" : "#f8fafc", color: form.appType === "Windows" ? "#fff" : "#0f172a", fontWeight: "700", fontSize: "12px" }}>
+                  <input type="radio" name="appType" value="Windows" checked={form.appType === "Windows"} onChange={handleChange} style={{ display: "none" }} />
+                  💻 Windows App
+                </label>
+                <label style={{ flex: 1, cursor: "pointer", padding: "8px 4px", borderRadius: "8px", border: "1px solid #cbd5e1", textAlign: "center", background: form.appType === "Website" ? "#d97706" : "#f8fafc", color: form.appType === "Website" ? "#fff" : "#0f172a", fontWeight: "700", fontSize: "12px" }}>
                   <input type="radio" name="appType" value="Website" checked={form.appType === "Website"} onChange={handleChange} style={{ display: "none" }} />
                   🌐 Website
                 </label>
               </div>
 
-              <input type="text" name="title" placeholder={form.appType === "Website" ? "Website Title *" : "App Title *"} value={form.title} onChange={handleChange} required style={inputStyle} />
-              
+              <input 
+                type="text" 
+                name="title" 
+                placeholder={form.appType === "Website" ? "Website Title *" : form.appType === "Windows" ? "Windows App Title *" : "Android App Title *"} 
+                value={form.title} 
+                onChange={handleChange} 
+                required 
+                style={inputStyle} 
+              />
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                 <input type="text" name="developerName" placeholder="Developer / Owner Name" value={form.developerName} onChange={handleChange} style={inputStyle} />
                 <input type="text" name="developerLink" placeholder="Developer Link (URL)" value={form.developerLink} onChange={handleChange} style={inputStyle} />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: form.appType === "App" ? "1fr 1fr 1fr" : "1fr 1fr", gap: "10px" }}>
-                {/* CATEGORY DROPDOWN */}
+              <div style={{ display: "grid", gridTemplateColumns: form.appType === "Website" ? "1fr 1fr" : "1fr 1fr 1fr", gap: "10px" }}>
                 <select name="category" value={form.category} onChange={handleChange} style={inputStyle}>
                   {categories.map((cat, i) => (
                     <option key={i} value={cat}>{cat}</option>
@@ -519,17 +571,21 @@ export default function Admin() {
                 </select>
 
                 <input type="text" name="version" placeholder={form.appType === "Website" ? "Status (e.g. Live / v1.0)" : "1.0.0"} value={form.version} onChange={handleChange} style={inputStyle} />
-                
+
                 {form.appType === "App" && (
                   <input type="text" name="androidReq" placeholder="Android 8.0+" value={form.androidReq} onChange={handleChange} style={inputStyle} />
                 )}
+
+                {form.appType === "Windows" && (
+                  <input type="text" name="windowsReq" placeholder="Windows 10/11 (64-bit)" value={form.windowsReq} onChange={handleChange} style={inputStyle} />
+                )}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: form.appType === "App" ? "1fr 1fr" : "1fr", gap: "10px" }}>
-                {form.appType === "App" && (
-                  <input type="text" name="size" placeholder="App Size (e.g., 25 MB)" value={form.size} onChange={handleChange} style={inputStyle} />
+              <div style={{ display: "grid", gridTemplateColumns: form.appType === "Website" ? "1fr" : "1fr 1fr", gap: "10px" }}>
+                {form.appType !== "Website" && (
+                  <input type="text" name="size" placeholder="File Size (e.g., 45 MB / 1.2 GB)" value={form.size} onChange={handleChange} style={inputStyle} />
                 )}
-                
+
                 <div>
                   <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "700" }}>Upload Logo / Icon *</label>
                   <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "imageUrl")} style={inputStyle} />
@@ -543,10 +599,17 @@ export default function Admin() {
                 </div>
               )}
 
-              {/* LINKS SECTION */}
-              <input type="text" name="driveUrl" placeholder={form.appType === "Website" ? "Primary Website Link *" : "Primary Download Link (Drive/Mega) *"} value={form.driveUrl} onChange={handleChange} required style={inputStyle} />
-              <input type="text" name="driveUrl2" placeholder={form.appType === "Website" ? "Mirror Link 1 (Optional)" : "Mirror Link 1 (Optional)"} value={form.driveUrl2} onChange={handleChange} style={inputStyle} />
-              <input type="text" name="driveUrl3" placeholder={form.appType === "Website" ? "Mirror Link 2 (Optional)" : "Mirror Link 2 (Optional)"} value={form.driveUrl3} onChange={handleChange} style={inputStyle} />
+              <input 
+                type="text" 
+                name="driveUrl" 
+                placeholder={form.appType === "Website" ? "Primary Website Link *" : form.appType === "Windows" ? "Windows Installer/Setup Download Link *" : "Primary Download Link (Drive/Mega) *"} 
+                value={form.driveUrl} 
+                onChange={handleChange} 
+                required 
+                style={inputStyle} 
+              />
+              <input type="text" name="driveUrl2" placeholder="Mirror Link 1 (Optional)" value={form.driveUrl2} onChange={handleChange} style={inputStyle} />
+              <input type="text" name="driveUrl3" placeholder="Mirror Link 2 (Optional)" value={form.driveUrl3} onChange={handleChange} style={inputStyle} />
 
               <div style={{ textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", margin: "4px 0" }}>
                 Upload Screenshots (Optional)
@@ -574,13 +637,3 @@ export default function Admin() {
     </div>
   );
 }
-
-const inputStyle = {
-  width: "100%",
-  padding: "9px 12px",
-  borderRadius: "8px",
-  border: "1px solid #cbd5e1",
-  fontSize: "12px",
-  outline: "none",
-  boxSizing: "border-box"
-};
