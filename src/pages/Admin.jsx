@@ -11,7 +11,6 @@ import {
   setDoc 
 } from "firebase/firestore";
 
-// Sorted alphabetically by default
 const DEFAULT_CATEGORIES = ["Business", "Entertainment", "Games", "Productivity", "Social", "Tools"];
 
 export default function Admin() {
@@ -28,11 +27,13 @@ export default function Admin() {
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  const [form, setForm] = useState({
+  // 🌐 appType ("App" | "Website") ပါဝင်သော Initial Form State
+  const initialFormState = {
     title: "",
     developerName: "",
     developerLink: "",
     category: "Business",
+    appType: "App", // "App" သို့မဟုတ် "Website"
     version: "1.0.0",
     androidReq: "Android 8.0+",
     size: "",
@@ -43,7 +44,9 @@ export default function Admin() {
     descEN: "",
     descMM: "",
     screenshots: ["", "", ""]
-  });
+  };
+
+  const [form, setForm] = useState(initialFormState);
 
   const [currentPage, setCurrentPage] = useState(1);
   const appsPerPage = 6;
@@ -101,7 +104,6 @@ export default function Admin() {
     }
   };
 
-  // 📁 Fetch & Alphabetically Sort Categories
   const fetchCategories = async () => {
     try {
       const docSnap = await getDoc(doc(db, "settings", "categories"));
@@ -117,7 +119,6 @@ export default function Admin() {
     }
   };
 
-  // ➕ Add New Custom Category
   const handleAddCategory = async (e) => {
     e.preventDefault();
     const trimmed = newCategoryInput.trim();
@@ -140,7 +141,6 @@ export default function Admin() {
     }
   };
 
-  // 🗑️ Delete Category
   const handleDeleteCategory = async (catToDelete) => {
     if (categories.length <= 1) {
       alert("You must keep at least one category!");
@@ -209,7 +209,6 @@ export default function Admin() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  // 📁 Handle Icon Upload & Auto Size Calculation
   const handleFileUpload = (e, targetField) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -227,7 +226,6 @@ export default function Admin() {
     reader.readAsDataURL(file);
   };
 
-  // 📁 Handle Screenshot Uploads
   const handleScreenshotUpload = (index, e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -246,7 +244,7 @@ export default function Admin() {
     try {
       if (editingId) {
         await updateDoc(doc(db, "apps", editingId), form);
-        alert("App updated successfully!");
+        alert("Item updated successfully!");
       } else {
         await addDoc(collection(db, "apps"), {
           ...form,
@@ -256,14 +254,14 @@ export default function Admin() {
             locations: {}
           }
         });
-        alert("App published successfully!");
+        alert(`${form.appType === "Website" ? "Website" : "App"} published successfully!`);
       }
       resetForm();
       setShowFormModal(false);
       fetchApps();
     } catch (err) {
-      console.error("Error saving app:", err);
-      alert("Failed to save app.");
+      console.error("Error saving data:", err);
+      alert("Failed to save.");
     }
   };
 
@@ -274,6 +272,7 @@ export default function Admin() {
       developerName: app.developerName || "",
       developerLink: app.developerLink || "",
       category: app.category || categories[0] || "Business",
+      appType: app.appType || "App",
       version: app.version || "1.0.0",
       androidReq: app.androidReq || "Android 8.0+",
       size: app.size || "",
@@ -289,13 +288,13 @@ export default function Admin() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this app?")) {
+    if (window.confirm("Are you sure you want to delete this item?")) {
       try {
         await deleteDoc(doc(db, "apps", id));
-        alert("App deleted!");
+        alert("Item deleted!");
         fetchApps();
       } catch (err) {
-        console.error("Error deleting app:", err);
+        console.error("Error deleting item:", err);
       }
     }
   };
@@ -303,20 +302,8 @@ export default function Admin() {
   const resetForm = () => {
     setEditingId(null);
     setForm({
-      title: "",
-      developerName: "",
-      developerLink: "",
-      category: categories[0] || "Business",
-      version: "1.0.0",
-      androidReq: "Android 8.0+",
-      size: "",
-      imageUrl: "",
-      driveUrl: "",
-      driveUrl2: "",
-      driveUrl3: "",
-      descEN: "",
-      descMM: "",
-      screenshots: ["", "", ""]
+      ...initialFormState,
+      category: categories[0] || "Business"
     });
   };
 
@@ -366,7 +353,7 @@ export default function Admin() {
       {/* TOP NAVIGATION */}
       <div style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0", padding: "10px 16px", display: "flex", gap: "8px", alignItems: "center", overflowX: "auto" }}>
         <button onClick={() => setActiveTab("apps")} style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: activeTab === "apps" ? "#d97706" : "#f1f5f9", color: activeTab === "apps" ? "#ffffff" : "#475569", fontWeight: "700", fontSize: "12px", cursor: "pointer" }}>
-          📋 Uploaded Apps ({apps.length})
+          📋 Uploaded Items ({apps.length})
         </button>
         <button onClick={() => setActiveTab("settings")} style={{ padding: "8px 14px", borderRadius: "8px", border: "none", background: activeTab === "settings" ? "#d97706" : "#f1f5f9", color: activeTab === "settings" ? "#ffffff" : "#475569", fontWeight: "700", fontSize: "12px", cursor: "pointer" }}>
           ⚙️ Settings & Categories
@@ -384,22 +371,22 @@ export default function Admin() {
           <button 
             onClick={() => { resetForm(); setShowFormModal(true); }}
             style={{ background: "#10b981", color: "#ffffff", border: "none", padding: "8px 14px", borderRadius: "8px", fontWeight: "800", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
-            ➕ Add New App
+            ➕ Add New Item
           </button>
         </div>
       </div>
 
       <main style={{ maxWidth: "1100px", margin: "0 auto", padding: "20px 16px" }}>
         
-        {/* TAB 1: UPLOADED APPS LIST */}
+        {/* TAB 1: UPLOADED APPS & WEBSITES LIST */}
         {activeTab === "apps" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>📋 Manage Applications & Tracking</h3>
+              <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#0f172a" }}>📋 Manage Applications & Websites</h3>
             </div>
 
             {apps.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "40px", background: "#fff", borderRadius: "16px", color: "#94a3b8" }}>No applications found. Click "Add New App" to publish.</div>
+              <div style={{ textAlign: "center", padding: "40px", background: "#fff", borderRadius: "16px", color: "#94a3b8" }}>No items found. Click "Add New Item" to publish.</div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
                 {currentApps.map((app) => (
@@ -408,23 +395,21 @@ export default function Admin() {
                       <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
                         <img src={app.imageUrl || "https://via.placeholder.com/50"} alt="" style={{ width: "48px", height: "48px", borderRadius: "10px", objectFit: "cover" }} />
                         <div style={{ overflow: "hidden" }}>
-                          <div style={{ fontWeight: "800", fontSize: "14px", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{app.title}</div>
+                          <div style={{ fontWeight: "800", fontSize: "14px", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {app.appType === "Website" ? "🌐 " : "📱 "}{app.title}
+                          </div>
                           <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{app.category} • v{app.version}</div>
                         </div>
                       </div>
 
                       <div style={{ background: "#f8fafc", padding: "10px", borderRadius: "8px", border: "1px solid #f1f5f9", marginBottom: "12px", fontSize: "11px", display: "flex", flexDirection: "column", gap: "6px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "700" }}>
-                          <span>📥 Downloads:</span>
+                          <span>📥 {app.appType === "Website" ? "Visits:" : "Downloads:"}</span>
                           <span style={{ color: "#d97706", fontWeight: "800" }}>{app.downloadCount || 0} times</span>
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
                           <span>📱 Top Devices:</span>
                           <span>Android ({app.analytics?.devices?.Android || 0}), iOS ({app.analytics?.devices?.iOS || 0})</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
-                          <span>📍 Main Location:</span>
-                          <span>{Object.keys(app.analytics?.locations || {}).length > 0 ? Object.keys(app.analytics.locations)[0] : "Myanmar"}</span>
                         </div>
                       </div>
                     </div>
@@ -493,42 +478,60 @@ export default function Admin() {
 
       </main>
 
-      {/* ➕ MODAL FORM FOR NEW / EDIT APP */}
+      {/* ➕ MODAL FORM FOR NEW / EDIT APP OR WEBSITE */}
       {showFormModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", zIndex: 1000 }}>
           <div style={{ background: "#ffffff", borderRadius: "16px", padding: "24px", width: "100%", maxWidth: "600px", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 style={{ margin: 0, fontWeight: "800", fontSize: "1.2rem", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ color: "#d97706" }}>➕</span> {editingId ? "Edit Application" : "Upload New Application"}
+                <span style={{ color: "#d97706" }}>➕</span> {editingId ? "Edit Item" : "Upload New Item"}
               </h3>
               <button onClick={() => setShowFormModal(false)} style={{ border: "none", background: "none", fontSize: "18px", cursor: "pointer", color: "#64748b" }}>✕</button>
             </div>
 
             <form onSubmit={handleSubmitApp} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <input type="text" name="title" placeholder="App Title *" value={form.title} onChange={handleChange} required style={inputStyle} />
+              
+              {/* 🌐 TYPE SELECTION (App OR Website) */}
+              <div style={{ display: "flex", gap: "10px", marginBottom: "4px" }}>
+                <label style={{ flex: 1, cursor: "pointer", padding: "8px", borderRadius: "8px", border: "1px solid #cbd5e1", textAlign: "center", background: form.appType === "App" ? "#d97706" : "#f8fafc", color: form.appType === "App" ? "#fff" : "#0f172a", fontWeight: "700", fontSize: "12px" }}>
+                  <input type="radio" name="appType" value="App" checked={form.appType === "App"} onChange={handleChange} style={{ display: "none" }} />
+                  📱 Application
+                </label>
+                <label style={{ flex: 1, cursor: "pointer", padding: "8px", borderRadius: "8px", border: "1px solid #cbd5e1", textAlign: "center", background: form.appType === "Website" ? "#d97706" : "#f8fafc", color: form.appType === "Website" ? "#fff" : "#0f172a", fontWeight: "700", fontSize: "12px" }}>
+                  <input type="radio" name="appType" value="Website" checked={form.appType === "Website"} onChange={handleChange} style={{ display: "none" }} />
+                  🌐 Website
+                </label>
+              </div>
+
+              <input type="text" name="title" placeholder={form.appType === "Website" ? "Website Title *" : "App Title *"} value={form.title} onChange={handleChange} required style={inputStyle} />
               
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <input type="text" name="developerName" placeholder="Developer Name" value={form.developerName} onChange={handleChange} style={inputStyle} />
+                <input type="text" name="developerName" placeholder="Developer / Owner Name" value={form.developerName} onChange={handleChange} style={inputStyle} />
                 <input type="text" name="developerLink" placeholder="Developer Link (URL)" value={form.developerLink} onChange={handleChange} style={inputStyle} />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                {/* SORTED CUSTOM CATEGORY DROPDOWN */}
+              <div style={{ display: "grid", gridTemplateColumns: form.appType === "App" ? "1fr 1fr 1fr" : "1fr 1fr", gap: "10px" }}>
+                {/* CATEGORY DROPDOWN */}
                 <select name="category" value={form.category} onChange={handleChange} style={inputStyle}>
                   {categories.map((cat, i) => (
                     <option key={i} value={cat}>{cat}</option>
                   ))}
                 </select>
 
-                <input type="text" name="version" placeholder="1.0.0" value={form.version} onChange={handleChange} style={inputStyle} />
-                <input type="text" name="androidReq" placeholder="Android 8.0+" value={form.androidReq} onChange={handleChange} style={inputStyle} />
+                <input type="text" name="version" placeholder={form.appType === "Website" ? "Status (e.g. Live / v1.0)" : "1.0.0"} value={form.version} onChange={handleChange} style={inputStyle} />
+                
+                {form.appType === "App" && (
+                  <input type="text" name="androidReq" placeholder="Android 8.0+" value={form.androidReq} onChange={handleChange} style={inputStyle} />
+                )}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                <input type="text" name="size" placeholder="App Size (e.g., 25 MB)" value={form.size} onChange={handleChange} style={inputStyle} />
+              <div style={{ display: "grid", gridTemplateColumns: form.appType === "App" ? "1fr 1fr" : "1fr", gap: "10px" }}>
+                {form.appType === "App" && (
+                  <input type="text" name="size" placeholder="App Size (e.g., 25 MB)" value={form.size} onChange={handleChange} style={inputStyle} />
+                )}
                 
                 <div>
-                  <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "700" }}>Upload Icon *</label>
+                  <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "700" }}>Upload Logo / Icon *</label>
                   <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, "imageUrl")} style={inputStyle} />
                 </div>
               </div>
@@ -540,9 +543,10 @@ export default function Admin() {
                 </div>
               )}
 
-              <input type="text" name="driveUrl" placeholder="Primary Download Link (Drive/Mega) *" value={form.driveUrl} onChange={handleChange} required style={inputStyle} />
-              <input type="text" name="driveUrl2" placeholder="Mirror Link 1 (Optional)" value={form.driveUrl2} onChange={handleChange} style={inputStyle} />
-              <input type="text" name="driveUrl3" placeholder="Mirror Link 2 (Optional)" value={form.driveUrl3} onChange={handleChange} style={inputStyle} />
+              {/* LINKS SECTION */}
+              <input type="text" name="driveUrl" placeholder={form.appType === "Website" ? "Primary Website Link *" : "Primary Download Link (Drive/Mega) *"} value={form.driveUrl} onChange={handleChange} required style={inputStyle} />
+              <input type="text" name="driveUrl2" placeholder={form.appType === "Website" ? "Mirror Link 1 (Optional)" : "Mirror Link 1 (Optional)"} value={form.driveUrl2} onChange={handleChange} style={inputStyle} />
+              <input type="text" name="driveUrl3" placeholder={form.appType === "Website" ? "Mirror Link 2 (Optional)" : "Mirror Link 2 (Optional)"} value={form.driveUrl3} onChange={handleChange} style={inputStyle} />
 
               <div style={{ textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", margin: "4px 0" }}>
                 Upload Screenshots (Optional)
@@ -561,7 +565,7 @@ export default function Admin() {
               <textarea name="descMM" placeholder="Description (Myanmar)" value={form.descMM} onChange={handleChange} rows={3} style={inputStyle}></textarea>
 
               <button type="submit" style={{ background: "#d97706", color: "#fff", padding: "12px", border: "none", borderRadius: "8px", fontWeight: "800", cursor: "pointer", fontSize: "14px", marginTop: "8px" }}>
-                {editingId ? "Update App" : "Publish App"}
+                {editingId ? "Update Item" : "Publish Item"}
               </button>
             </form>
           </div>
